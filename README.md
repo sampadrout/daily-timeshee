@@ -75,12 +75,15 @@ This serves the site and the API locally using a local D1 emulator and your `.de
 
 ## Features
 
-- **90-day retention** — secure modal overlay blocks the app content until unlocked with the correct password. An active session uses a secure SHA-256 token stored in local storage and can be ended with the **Logout** button.
+- **Password protection** — a secure modal overlay blocks the app content until unlocked with the correct password. An active session uses a secure SHA-256 token stored in local storage and can be ended with the **Logout** button.
 - **Log entries**: date (defaults to today), task, optional description, hours worked.
-- **Configured task list**: add/remove tasks — or pick **“＋ New task…”** while logging to add one on the fly.
+- **Intelligent autocomplete**:
+  - The **Task** field suggests matching tasks from your configured list as you type (type a new name to create one on the fly).
+  - The **Description** field suggests descriptions you've used before, prioritizing ones previously logged against the currently selected task, with the matched text highlighted. Use ↑/↓ + Enter or click to pick a suggestion.
+- **Configured task list**: add/remove tasks in their own section, independent of the entry form.
 - **90-day retention**: the server deletes entries older than 90 days (by work date) on every read.
-- **Download**: export everything as **CSV** (Excel-friendly) or **JSON** at any time.
-- Per-day and overall hour totals, dark mode, works on mobile.
+- **Download**: export everything as **CSV** (Excel-friendly) at any time.
+- Per-day and overall hour totals, dark mode (with manual toggle), works on mobile.
 
 ## Data & storage
 

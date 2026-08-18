@@ -8,21 +8,21 @@ const $ = (sel) => document.querySelector(sel);
 const els = {
   form: $('#entry-form'),
   date: $('#entry-date'),
-  taskSelect: $('#task-select'),
-  newTaskInput: $('#new-task-input'),
+  entryTaskInput: $('#entry-task-input'),
+  entryTaskSuggestions: $('#entry-task-suggestions'),
   description: $('#description'),
+  descriptionSuggestions: $('#description-suggestions'),
   hours: $('#hours'),
   saveBtn: $('#save-entry'),
   formError: $('#form-error'),
   taskForm: $('#task-form'),
-  taskInput: $('#task-name-input'),
+  newTaskNameInput: $('#new-task-name-input'),
   taskAddBtn: $('#task-add-btn'),
   taskList: $('#task-list'),
   entryList: $('#entry-list'),
   entriesCount: $('#entries-count'),
   totalHours: $('#total-hours'),
   downloadCsv: $('#download-csv'),
-  downloadJson: $('#download-json'),
   banner: $('#banner'),
   logoutBtn: $('#logout-btn'),
   loginOverlay: $('#login-overlay'),
@@ -166,7 +166,6 @@ function handleLogout() {
   entries = [];
   tasks = [];
   renderTasks();
-  renderTaskSelect();
   renderEntries();
   showLoginOverlay();
 }
@@ -247,7 +246,6 @@ function renderTasks() {
       try {
         await removeTask(name);
         renderTasks();
-        renderTaskSelect();
       } catch (err) {
         showBanner(`Couldn't remove task: ${err.message}`);
       } finally {
@@ -259,44 +257,20 @@ function renderTasks() {
   }
 }
 
-function renderTaskSelect() {
-  const previous = els.taskSelect.value;
-  els.taskSelect.textContent = '';
-  const placeholder = new Option('Select a task…', '');
-  placeholder.disabled = true;
-  els.taskSelect.add(placeholder);
-  for (const name of tasks) els.taskSelect.add(new Option(name, name));
-  els.taskSelect.add(new Option('＋ New task…', '__new__'));
-
-  if (previous && [...els.taskSelect.options].some((o) => o.value === previous)) {
-    els.taskSelect.value = previous;
-  } else {
-    els.taskSelect.selectedIndex = 0;
-  }
-  toggleNewTaskInput();
-}
-
 async function handleTaskAdd(ev) {
   ev.preventDefault();
-  const name = els.taskInput.value.trim();
+  const name = els.newTaskNameInput.value.trim();
   if (!name) return;
   els.taskAddBtn.disabled = true;
   try {
     await addTask(name);
-    els.taskInput.value = '';
+    els.newTaskNameInput.value = '';
     renderTasks();
-    renderTaskSelect();
   } catch (err) {
     showBanner(`Couldn't add task: ${err.message}`);
   } finally {
     els.taskAddBtn.disabled = false;
   }
-}
-
-function toggleNewTaskInput() {
-  const isNew = els.taskSelect.value === '__new__';
-  els.newTaskInput.classList.toggle('hidden', !isNew);
-  if (isNew) els.newTaskInput.focus();
 }
 
 /* ---------- Entries ---------- */
@@ -313,7 +287,7 @@ function renderEntries() {
 
   const total = entries.reduce((sum, e) => sum + e.hours, 0);
   els.totalHours.textContent = entries.length ? `${formatHours(total)} h total` : '';
-  els.downloadCsv.disabled = els.downloadJson.disabled = !entries.length;
+  els.downloadCsv.disabled = !entries.length;
 
   if (!entries.length) {
     els.entryList.appendChild(el('p', 'empty-note', 'No entries yet. Log your first one above — it will appear here.'));
@@ -370,10 +344,8 @@ async function handleSave(ev) {
   const date = els.date.value;
   if (!date) return showError('Please pick a date.');
 
-  let task = '';
-  if (els.taskSelect.value === '__new__') task = els.newTaskInput.value.trim();
-  else if (els.taskSelect.value) task = els.taskSelect.value;
-  if (!task) return showError('Choose a task, or pick “New task…” and give it a name.');
+  const task = els.entryTaskInput.value.trim();
+  if (!task) return showError('Enter or select a task.');
 
   const hours = Number(els.hours.value);
   if (!Number.isFinite(hours) || hours <= 0) return showError('Enter how many hours you worked (more than 0).');
@@ -396,15 +368,11 @@ async function handleSave(ev) {
     }
     await saveEntry({ id, date, task, description, hours, createdAt: new Date().toISOString() });
     renderTasks();
-    renderTaskSelect();
     renderEntries();
 
     // Reset the transient fields, keep date + task for rapid consecutive logging.
     els.description.value = '';
     els.hours.value = '';
-    els.newTaskInput.value = '';
-    els.newTaskInput.classList.add('hidden');
-    if ([...els.taskSelect.options].some((o) => o.value === task)) els.taskSelect.value = task;
     els.hours.focus();
   } catch (err) {
     showError(`Couldn't save entry: ${err.message}`);
@@ -439,10 +407,6 @@ function exportCsv() {
   downloadBlob(csv, `timesheet-${todayISO()}.csv`, 'text/csv;charset=utf-8');
 }
 
-function exportJson() {
-  const payload = { exportedAt: new Date().toISOString(), entries: sortedEntries() };
-  downloadBlob(JSON.stringify(payload, null, 2), `timesheet-${todayISO()}.json`, 'application/json');
-}
 
 /* ---------- App Loader ---------- */
 
@@ -459,8 +423,131 @@ async function loadAppData() {
   }
 
   renderTasks();
-  renderTaskSelect();
   renderEntries();
+}
+
+/* ---------- Autocomplete ---------- */
+
+function highlightMatch(label, query) {
+  const q = query.trim();
+  if (!q) return document.createTextNode(label);
+  const idx = label.toLowerCase().indexOf(q.toLowerCase());
+  if (idx === -1) return document.createTextNode(label);
+
+  const frag = document.createDocumentFragment();
+  const before = label.slice(0, idx);
+  const match = label.slice(idx, idx + q.length);
+  const after = label.slice(idx + q.length);
+  if (before) frag.appendChild(document.createTextNode(before));
+  frag.appendChild(el('mark', null, match));
+  if (after) frag.appendChild(document.createTextNode(after));
+  return frag;
+}
+
+function createAutocomplete({ input, list, getSuggestions }) {
+  let items = [];
+  let activeIndex = -1;
+
+  function render() {
+    list.textContent = '';
+    if (!items.length) {
+      list.classList.add('hidden');
+      activeIndex = -1;
+      return;
+    }
+    items.forEach((item, i) => {
+      const li = el('li', 'autocomplete-item' + (i === activeIndex ? ' active' : ''));
+      li.appendChild(highlightMatch(item.label, input.value));
+      if (item.meta) li.appendChild(el('span', 'ac-meta', item.meta));
+      li.addEventListener('mousedown', (ev) => {
+        ev.preventDefault(); // keep focus on the input so blur doesn't fire first
+        select(item.value);
+      });
+      list.appendChild(li);
+    });
+    list.classList.remove('hidden');
+  }
+
+  function select(value) {
+    input.value = value;
+    close();
+    input.dispatchEvent(new Event('change'));
+    input.focus();
+  }
+
+  function close() {
+    items = [];
+    activeIndex = -1;
+    list.textContent = '';
+    list.classList.add('hidden');
+  }
+
+  function update() {
+    items = getSuggestions(input.value).slice(0, 8);
+    activeIndex = items.length ? 0 : -1;
+    render();
+  }
+
+  input.addEventListener('input', update);
+  input.addEventListener('focus', update);
+  input.addEventListener('keydown', (ev) => {
+    if (list.classList.contains('hidden') || !items.length) return;
+    if (ev.key === 'ArrowDown') {
+      ev.preventDefault();
+      activeIndex = (activeIndex + 1) % items.length;
+      render();
+    } else if (ev.key === 'ArrowUp') {
+      ev.preventDefault();
+      activeIndex = (activeIndex - 1 + items.length) % items.length;
+      render();
+    } else if (ev.key === 'Enter') {
+      if (activeIndex >= 0) {
+        ev.preventDefault();
+        select(items[activeIndex].value);
+      }
+    } else if (ev.key === 'Escape') {
+      close();
+    }
+  });
+  input.addEventListener('blur', close);
+
+  return { close };
+}
+
+function getTaskSuggestions(query) {
+  const q = query.trim().toLowerCase();
+  const matches = q ? tasks.filter((t) => t.toLowerCase().includes(q)) : tasks.slice();
+  return matches
+    .filter((t) => t.toLowerCase() !== q)
+    .map((t) => ({ value: t, label: t }));
+}
+
+function getDescriptionSuggestions(query) {
+  const q = query.trim().toLowerCase();
+  const currentTask = els.entryTaskInput.value.trim().toLowerCase();
+
+  const sameTask = new Map();
+  const otherTask = new Map();
+  for (const e of entries) {
+    if (!e.description) continue;
+    const bucket = currentTask && e.task.toLowerCase() === currentTask ? sameTask : otherTask;
+    bucket.set(e.description, (bucket.get(e.description) || 0) + 1);
+  }
+
+  const rank = (map) =>
+    [...map.entries()]
+      .filter(([desc]) => !q || desc.toLowerCase().includes(q))
+      .sort((a, b) => b[1] - a[1])
+      .map(([desc]) => desc);
+
+  const seen = new Set();
+  const suggestions = [];
+  for (const desc of [...rank(sameTask), ...rank(otherTask)]) {
+    if (seen.has(desc) || desc.toLowerCase() === q) continue;
+    seen.add(desc);
+    suggestions.push({ value: desc, label: desc, meta: currentTask && sameTask.has(desc) ? 'Used for this task' : 'Previously used' });
+  }
+  return suggestions;
 }
 
 /** ---------- Theme Toggle ---------- */
@@ -490,10 +577,20 @@ async function init() {
   els.date.min = cutoffISO(); // fallback
 
   els.form.addEventListener('submit', handleSave);
-  els.taskSelect.addEventListener('change', toggleNewTaskInput);
   els.taskForm.addEventListener('submit', handleTaskAdd);
   els.downloadCsv.addEventListener('click', exportCsv);
-  els.downloadJson.addEventListener('click', exportJson);
+
+  // Intelligent autocomplete for the task and description fields
+  createAutocomplete({
+    input: els.entryTaskInput,
+    list: els.entryTaskSuggestions,
+    getSuggestions: getTaskSuggestions,
+  });
+  createAutocomplete({
+    input: els.description,
+    list: els.descriptionSuggestions,
+    getSuggestions: getDescriptionSuggestions,
+  });
 
   // Theme toggle listener
   els.themeToggle.addEventListener('click', handleThemeToggle);

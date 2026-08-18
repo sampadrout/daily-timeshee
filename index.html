@@ -48,14 +48,15 @@
           <label>Date
             <input type="date" id="entry-date" required>
           </label>
-          <label>Task
-            <select id="task-select" required></select>
-            <input type="text" id="new-task-input" class="hidden" placeholder="New task name" autocomplete="off">
+          <label class="autocomplete-field">Task
+            <input type="text" id="entry-task-input" required placeholder="Type to search or add a task…" autocomplete="off">
+            <ul id="entry-task-suggestions" class="autocomplete-list hidden"></ul>
           </label>
         </div>
 
-        <label>Description
+        <label class="autocomplete-field">Description
           <textarea id="description" rows="2" placeholder="What did you work on? (optional)"></textarea>
+          <ul id="description-suggestions" class="autocomplete-list hidden"></ul>
         </label>
 
         <div class="form-row">
@@ -75,7 +76,6 @@
         <div class="card-actions">
           <span id="total-hours" class="total"></span>
           <button type="button" id="download-csv" class="btn btn-ghost" title="Download all entries as CSV">↓ CSV</button>
-          <button type="button" id="download-json" class="btn btn-ghost" title="Download all entries as JSON">↓ JSON</button>
         </div>
       </div>
       <div id="entry-list"></div>
@@ -84,7 +84,7 @@
     <section class="card">
       <h2>Configured tasks</h2>
       <form id="task-form" class="task-form" novalidate>
-        <input type="text" id="task-name-input" placeholder="Add a task (e.g. Project Alpha)" autocomplete="off">
+        <input type="text" id="new-task-name-input" placeholder="Add a task (e.g. Project Alpha)" autocomplete="off">
         <button type="submit" class="btn btn-primary" id="task-add-btn">Add</button>
       </form>
       <ul id="task-list" class="task-list"></ul>
