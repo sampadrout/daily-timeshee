@@ -57,8 +57,8 @@ async function api(path, options = {}) {
     ...options,
   });
 
-  if (res.status === 401) {
-    // Session expired or invalid token
+  if (res.status === 401 && path !== '/api/login') {
+    // Session expired or invalid token (on routes other than login itself)
     localStorage.removeItem(TOKEN_KEY);
     showLoginOverlay();
     throw new Error('Session expired. Please log in again.');
