@@ -42,7 +42,7 @@
 
   <main id="app-content">
     <section class="card">
-      <h2>New entry</h2>
+      <h2 id="form-heading">New entry</h2>
       <form id="entry-form" novalidate>
         <div class="form-row">
           <label>Date
@@ -60,10 +60,13 @@
         </label>
 
         <div class="form-row">
-          <label>Hours
-            <input type="number" id="hours" min="0.25" max="24" step="0.25" placeholder="e.g. 7.5" inputmode="decimal" required>
+          <label>Hours (HH:MM)
+            <input type="time" id="hours" step="60" required>
           </label>
-          <button type="submit" class="btn btn-primary" id="save-entry">Save entry</button>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="save-entry">Save entry</button>
+            <button type="button" class="btn btn-ghost hidden" id="cancel-edit">Cancel</button>
+          </div>
         </div>
 
         <p id="form-error" class="error" role="alert" hidden></p>

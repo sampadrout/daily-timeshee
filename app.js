@@ -7,6 +7,7 @@ const $ = (sel) => document.querySelector(sel);
 
 const els = {
   form: $('#entry-form'),
+  formHeading: $('#form-heading'),
   date: $('#entry-date'),
   entryTaskInput: $('#entry-task-input'),
   entryTaskSuggestions: $('#entry-task-suggestions'),
@@ -14,6 +15,7 @@ const els = {
   descriptionSuggestions: $('#description-suggestions'),
   hours: $('#hours'),
   saveBtn: $('#save-entry'),
+  cancelEditBtn: $('#cancel-edit'),
   formError: $('#form-error'),
   taskForm: $('#task-form'),
   newTaskNameInput: $('#new-task-name-input'),
@@ -39,6 +41,7 @@ const THEME_KEY = 'timesheet.theme.v1';
 let tasks = [];
 let entries = [];
 let bannerTimer;
+let editingEntryId = null;
 
 /* ---------- API ---------- */
 
@@ -91,6 +94,12 @@ async function loadTasks() {
 async function saveEntry(entry) {
   const data = await api('/api/entries', { method: 'POST', body: JSON.stringify(entry) });
   entries.push(data.entry);
+}
+
+async function updateEntry(id, fields) {
+  await api(`/api/entries/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(fields) });
+  const idx = entries.findIndex((e) => e.id === id);
+  if (idx !== -1) entries[idx] = { ...entries[idx], ...fields };
 }
 
 async function deleteEntry(id) {
@@ -165,6 +174,7 @@ function handleLogout() {
   localStorage.removeItem(TOKEN_KEY);
   entries = [];
   tasks = [];
+  cancelEdit();
   renderTasks();
   renderEntries();
   showLoginOverlay();
@@ -210,8 +220,27 @@ function el(tag, className, text) {
   return node;
 }
 
-function formatHours(n) {
-  return (Math.round(n * 100) / 100).toString();
+function formatDuration(hoursDecimal) {
+  const totalMinutes = Math.round(hoursDecimal * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return m === 0 ? `${h}h` : `${h}h ${String(m).padStart(2, '0')}m`;
+}
+
+function toHHMM(hoursDecimal) {
+  const totalMinutes = Math.round(hoursDecimal * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${pad2(h)}:${pad2(m)}`;
+}
+
+function parseHHMM(value) {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value || '');
+  if (!match) return NaN;
+  const h = Number(match[1]);
+  const m = Number(match[2]);
+  if (m > 59) return NaN;
+  return h + m / 60;
 }
 
 function showError(msg) {
@@ -286,7 +315,7 @@ function renderEntries() {
   els.entriesCount.textContent = String(entries.length);
 
   const total = entries.reduce((sum, e) => sum + e.hours, 0);
-  els.totalHours.textContent = entries.length ? `${formatHours(total)} h total` : '';
+  els.totalHours.textContent = entries.length ? `${formatDuration(total)} total` : '';
   els.downloadCsv.disabled = !entries.length;
 
   if (!entries.length) {
@@ -304,7 +333,7 @@ function renderEntries() {
     const day = el('div', 'day');
     const head = el('div', 'day-head');
     head.appendChild(el('h3', null, formatDateLabel(date)));
-    head.appendChild(el('span', 'day-total', `${formatHours(items.reduce((s, e) => s + e.hours, 0))} h`));
+    head.appendChild(el('span', 'day-total', formatDuration(items.reduce((s, e) => s + e.hours, 0))));
     day.appendChild(head);
     for (const item of items) day.appendChild(entryRow(item));
     els.entryList.appendChild(day);
@@ -314,7 +343,14 @@ function renderEntries() {
 function entryRow(item) {
   const row = el('div', 'entry');
   row.appendChild(el('span', 'entry-task', item.task));
-  row.appendChild(el('span', 'entry-hours', `${formatHours(item.hours)} h`));
+  row.appendChild(el('span', 'entry-hours', formatDuration(item.hours)));
+
+  const edit = el('button', 'btn-icon entry-edit', '✎');
+  edit.type = 'button';
+  edit.title = 'Edit entry';
+  edit.setAttribute('aria-label', `Edit ${item.task} entry on ${item.date}`);
+  edit.addEventListener('click', () => startEdit(item));
+  row.appendChild(edit);
 
   const remove = el('button', 'btn-icon entry-remove', '×');
   remove.type = 'button';
@@ -324,6 +360,7 @@ function entryRow(item) {
     remove.disabled = true;
     try {
       await deleteEntry(item.id);
+      if (editingEntryId === item.id) cancelEdit();
       renderEntries();
     } catch (err) {
       showBanner(`Couldn't delete entry: ${err.message}`);
@@ -347,15 +384,11 @@ async function handleSave(ev) {
   const task = els.entryTaskInput.value.trim();
   if (!task) return showError('Enter or select a task.');
 
-  const hours = Number(els.hours.value);
-  if (!Number.isFinite(hours) || hours <= 0) return showError('Enter how many hours you worked (more than 0).');
+  const hours = parseHHMM(els.hours.value);
+  if (!Number.isFinite(hours) || hours <= 0) return showError('Enter how many hours you worked (e.g. 07:30).');
   if (hours > 24) return showError("A single entry can't be more than 24 hours.");
 
   const description = els.description.value.trim();
-  const id =
-    typeof crypto !== 'undefined' && crypto.randomUUID
-      ? crypto.randomUUID()
-      : `e-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
   els.saveBtn.disabled = true;
   try {
@@ -366,7 +399,18 @@ async function handleSave(ev) {
         /* non-fatal: the entry itself still gets saved */
       }
     }
-    await saveEntry({ id, date, task, description, hours, createdAt: new Date().toISOString() });
+
+    if (editingEntryId) {
+      await updateEntry(editingEntryId, { date, task, description, hours });
+      finishEdit();
+    } else {
+      const id =
+        typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `e-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      await saveEntry({ id, date, task, description, hours, createdAt: new Date().toISOString() });
+    }
+
     renderTasks();
     renderEntries();
 
@@ -379,6 +423,36 @@ async function handleSave(ev) {
   } finally {
     els.saveBtn.disabled = false;
   }
+}
+
+function startEdit(item) {
+  editingEntryId = item.id;
+  els.date.value = item.date;
+  els.entryTaskInput.value = item.task;
+  els.description.value = item.description || '';
+  els.hours.value = toHHMM(item.hours);
+  els.saveBtn.textContent = 'Update entry';
+  els.cancelEditBtn.classList.remove('hidden');
+  if (els.formHeading) els.formHeading.textContent = 'Edit entry';
+  clearError();
+  els.form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  els.entryTaskInput.focus();
+}
+
+function finishEdit() {
+  editingEntryId = null;
+  els.saveBtn.textContent = 'Save entry';
+  els.cancelEditBtn.classList.add('hidden');
+  if (els.formHeading) els.formHeading.textContent = 'New entry';
+}
+
+function cancelEdit() {
+  finishEdit();
+  els.date.value = todayISO();
+  els.entryTaskInput.value = '';
+  els.description.value = '';
+  els.hours.value = '';
+  clearError();
 }
 
 /* ---------- Downloads ---------- */
@@ -577,6 +651,7 @@ async function init() {
   els.date.min = cutoffISO(); // fallback
 
   els.form.addEventListener('submit', handleSave);
+  els.cancelEditBtn.addEventListener('click', cancelEdit);
   els.taskForm.addEventListener('submit', handleTaskAdd);
   els.downloadCsv.addEventListener('click', exportCsv);
 

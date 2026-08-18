@@ -254,8 +254,14 @@ textarea {
   max-width: 140px;
 }
 
-.form-row > .btn {
+.form-actions {
+  display: flex;
+  gap: 8px;
   align-self: end;
+}
+
+.form-actions .btn {
+  flex: none;
 }
 
 .hidden {
@@ -421,6 +427,11 @@ textarea {
   background: rgba(220, 38, 38, 0.12);
 }
 
+.entry-edit:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
 .btn-icon:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -496,10 +507,10 @@ textarea {
 
 .entry {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr auto auto auto;
   grid-template-areas:
-    "task hours remove"
-    "desc desc desc";
+    "task hours edit remove"
+    "desc desc desc desc";
   gap: 2px 10px;
   padding: 8px 4px;
 }
@@ -516,6 +527,10 @@ textarea {
   font-weight: 600;
   font-size: 0.9rem;
   white-space: nowrap;
+}
+
+.entry-edit {
+  grid-area: edit;
 }
 
 .entry-remove {
@@ -546,8 +561,12 @@ textarea {
     grid-template-columns: 1fr;
   }
 
-  .form-row > .btn {
+  .form-row > .form-actions {
     align-self: start;
     width: 100%;
+  }
+
+  .form-actions .btn {
+    flex: 1;
   }
 }

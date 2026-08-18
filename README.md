@@ -16,8 +16,9 @@ API:
 | Route | Methods | Auth Required | Purpose |
 |---|---|---|---|
 | `/api/login` | `POST` | No | Submit password, get SHA-256 session token |
-| `/api/entries` | `GET` | List entries (also enforces the 90-day purge) |
+| `/api/entries` | `GET` | **Yes** | List entries (also enforces the 90-day purge) |
 | `/api/entries` | `POST` | **Yes** | Create an entry |
+| `/api/entries/:id`| `PUT` | **Yes** | Update an existing entry |
 | `/api/entries/:id`| `DELETE`| **Yes** | Delete one entry |
 | `/api/tasks` | `GET` / `POST`| **Yes** | List / add configured tasks |
 | `/api/tasks?name=…`| `DELETE` | **Yes** | Remove a configured task |
@@ -76,14 +77,15 @@ This serves the site and the API locally using a local D1 emulator and your `.de
 ## Features
 
 - **Password protection** — a secure modal overlay blocks the app content until unlocked with the correct password. An active session uses a secure SHA-256 token stored in local storage and can be ended with the **Logout** button.
-- **Log entries**: date (defaults to today), task, optional description, hours worked.
+- **Log entries**: date (defaults to today), task, optional description, hours worked (entered as **HH:MM**, e.g. `07:30`).
+- **Edit entries**: click the pencil (✎) on any entry to load it back into the form, make changes, and click **Update entry** — or **Cancel** to discard.
 - **Intelligent autocomplete**:
   - The **Task** field suggests matching tasks from your configured list as you type (type a new name to create one on the fly).
   - The **Description** field suggests descriptions you've used before, prioritizing ones previously logged against the currently selected task, with the matched text highlighted. Use ↑/↓ + Enter or click to pick a suggestion.
 - **Configured task list**: add/remove tasks in their own section, independent of the entry form.
 - **90-day retention**: the server deletes entries older than 90 days (by work date) on every read.
-- **Download**: export everything as **CSV** (Excel-friendly) at any time.
-- Per-day and overall hour totals, dark mode (with manual toggle), works on mobile.
+- **Download**: export everything as **CSV** (Excel-friendly, hours as decimal) at any time.
+- Per-day and overall hour totals shown as `Xh Ym`, dark mode (with manual toggle), works on mobile.
 
 ## Data & storage
 
