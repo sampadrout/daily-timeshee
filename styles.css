@@ -250,8 +250,22 @@ textarea {
   resize: vertical;
 }
 
-#hours {
-  max-width: 140px;
+.duration-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.duration-input input {
+  width: 64px;
+  flex: none;
+  text-align: center;
+}
+
+.duration-unit {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .form-actions {

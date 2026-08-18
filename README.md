@@ -77,7 +77,7 @@ This serves the site and the API locally using a local D1 emulator and your `.de
 ## Features
 
 - **Password protection** — a secure modal overlay blocks the app content until unlocked with the correct password. An active session uses a secure SHA-256 token stored in local storage and can be ended with the **Logout** button.
-- **Log entries**: date (defaults to today), task, optional description, hours worked (entered as **HH:MM**, e.g. `07:30`).
+- **Log entries**: date (defaults to today), task, optional description, and time worked entered as separate **hours** and **minutes** fields (e.g. `7` h `30` m) — not a clock/time-of-day picker.
 - **Edit entries**: click the pencil (✎) on any entry to load it back into the form, make changes, and click **Update entry** — or **Cancel** to discard.
 - **Intelligent autocomplete**:
   - The **Task** field suggests matching tasks from your configured list as you type (type a new name to create one on the fly).

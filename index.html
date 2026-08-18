@@ -60,8 +60,13 @@
         </label>
 
         <div class="form-row">
-          <label>Hours (HH:MM)
-            <input type="time" id="hours" step="60" required>
+          <label>Time worked
+            <div class="duration-input">
+              <input type="number" id="hours-part" min="0" max="24" step="1" placeholder="0" inputmode="numeric" aria-label="Hours worked" required>
+              <span class="duration-unit">h</span>
+              <input type="number" id="minutes-part" min="0" max="59" step="15" placeholder="0" inputmode="numeric" aria-label="Minutes worked">
+              <span class="duration-unit">m</span>
+            </div>
           </label>
           <div class="form-actions">
             <button type="submit" class="btn btn-primary" id="save-entry">Save entry</button>

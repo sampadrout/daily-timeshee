@@ -13,7 +13,8 @@ const els = {
   entryTaskSuggestions: $('#entry-task-suggestions'),
   description: $('#description'),
   descriptionSuggestions: $('#description-suggestions'),
-  hours: $('#hours'),
+  hoursPart: $('#hours-part'),
+  minutesPart: $('#minutes-part'),
   saveBtn: $('#save-entry'),
   cancelEditBtn: $('#cancel-edit'),
   formError: $('#form-error'),
@@ -227,19 +228,21 @@ function formatDuration(hoursDecimal) {
   return m === 0 ? `${h}h` : `${h}h ${String(m).padStart(2, '0')}m`;
 }
 
-function toHHMM(hoursDecimal) {
+function setDurationInputs(hoursDecimal) {
   const totalMinutes = Math.round(hoursDecimal * 60);
-  const h = Math.floor(totalMinutes / 60);
-  const m = totalMinutes % 60;
-  return `${pad2(h)}:${pad2(m)}`;
+  els.hoursPart.value = Math.floor(totalMinutes / 60);
+  els.minutesPart.value = totalMinutes % 60;
 }
 
-function parseHHMM(value) {
-  const match = /^(\d{1,2}):(\d{2})$/.exec(value || '');
-  if (!match) return NaN;
-  const h = Number(match[1]);
-  const m = Number(match[2]);
-  if (m > 59) return NaN;
+function clearDurationInputs() {
+  els.hoursPart.value = '';
+  els.minutesPart.value = '';
+}
+
+function getDurationHours() {
+  const h = els.hoursPart.value.trim() === '' ? NaN : Number(els.hoursPart.value);
+  const m = els.minutesPart.value.trim() === '' ? 0 : Number(els.minutesPart.value);
+  if (!Number.isFinite(h) || !Number.isFinite(m) || h < 0 || m < 0 || m > 59) return NaN;
   return h + m / 60;
 }
 
@@ -384,8 +387,8 @@ async function handleSave(ev) {
   const task = els.entryTaskInput.value.trim();
   if (!task) return showError('Enter or select a task.');
 
-  const hours = parseHHMM(els.hours.value);
-  if (!Number.isFinite(hours) || hours <= 0) return showError('Enter how many hours you worked (e.g. 07:30).');
+  const hours = getDurationHours();
+  if (!Number.isFinite(hours) || hours <= 0) return showError('Enter how much time you worked (hours and/or minutes).');
   if (hours > 24) return showError("A single entry can't be more than 24 hours.");
 
   const description = els.description.value.trim();
@@ -416,8 +419,8 @@ async function handleSave(ev) {
 
     // Reset the transient fields, keep date + task for rapid consecutive logging.
     els.description.value = '';
-    els.hours.value = '';
-    els.hours.focus();
+    clearDurationInputs();
+    els.hoursPart.focus();
   } catch (err) {
     showError(`Couldn't save entry: ${err.message}`);
   } finally {
@@ -430,7 +433,7 @@ function startEdit(item) {
   els.date.value = item.date;
   els.entryTaskInput.value = item.task;
   els.description.value = item.description || '';
-  els.hours.value = toHHMM(item.hours);
+  setDurationInputs(item.hours);
   els.saveBtn.textContent = 'Update entry';
   els.cancelEditBtn.classList.remove('hidden');
   if (els.formHeading) els.formHeading.textContent = 'Edit entry';
@@ -451,7 +454,7 @@ function cancelEdit() {
   els.date.value = todayISO();
   els.entryTaskInput.value = '';
   els.description.value = '';
-  els.hours.value = '';
+  clearDurationInputs();
   clearError();
 }
 
