@@ -286,6 +286,10 @@ textarea {
   z-index: 1000;
 }
 
+.modal-overlay[hidden] {
+  display: none !important;
+}
+
 .modal-card {
   background: var(--card);
   border: 1px solid var(--border);
