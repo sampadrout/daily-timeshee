@@ -5,4 +5,4 @@ compatibility_date = "2026-07-01"
 binding = "DB"
 database_name = "daily-timesheet-db"
 # Run `npx wrangler d1 create daily-timesheet-db` and paste the Database ID here.
-database_id = "REPLACE_WITH_DATABASE_ID"
+database_id = "085798c6-6dfe-47ef-bcc6-9a3ac6d7f52b"
