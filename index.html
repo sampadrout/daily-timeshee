@@ -86,7 +86,23 @@
           <button type="button" id="download-csv" class="btn btn-ghost" title="Download all entries as CSV">↓ CSV</button>
         </div>
       </div>
+
+      <div class="view-tabs" role="tablist">
+        <button type="button" class="view-tab active" id="view-list-btn" role="tab" aria-selected="true">☰ List</button>
+        <button type="button" class="view-tab" id="view-calendar-btn" role="tab" aria-selected="false">📅 Calendar</button>
+      </div>
+
       <div id="entry-list"></div>
+
+      <div id="calendar-view" class="hidden">
+        <div class="calendar-nav">
+          <button type="button" id="cal-prev" class="btn-icon" aria-label="Previous month">‹</button>
+          <h3 id="cal-month-label"></h3>
+          <button type="button" id="cal-next" class="btn-icon" aria-label="Next month">›</button>
+          <button type="button" id="cal-today" class="btn btn-ghost btn-sm">Today</button>
+        </div>
+        <div class="calendar-grid" id="calendar-grid"></div>
+      </div>
     </section>
 
     <section class="card">

@@ -83,6 +83,7 @@ This serves the site and the API locally using a local D1 emulator and your `.de
   - The **Task** field suggests matching tasks from your configured list as you type (type a new name to create one on the fly).
   - The **Description** field suggests descriptions you've used before, prioritizing ones previously logged against the currently selected task, with the matched text highlighted. Use ↑/↓ + Enter or click to pick a suggestion.
 - **Configured task list**: add/remove tasks in their own section, independent of the entry form.
+- **Calendar view**: toggle between **List** and **Calendar** to see a full month grid, with each day showing color-coded task chips (color is derived from the task name) and a daily hour total. Click any chip to edit that entry, use ‹ › to move between months, and **Today** to jump back to the current month. Your last-used view is remembered.
 - **90-day retention**: the server deletes entries older than 90 days (by work date) on every read.
 - **Download**: export everything as **CSV** (Excel-friendly, hours as decimal) at any time.
 - Per-day and overall hour totals shown as `Xh Ym`, dark mode (with manual toggle), works on mobile.

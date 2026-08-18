@@ -35,14 +35,25 @@ const els = {
   loginError: $('#login-error'),
   appContent: $('#app-content'),
   themeToggle: $('#theme-toggle'),
+  viewListBtn: $('#view-list-btn'),
+  viewCalendarBtn: $('#view-calendar-btn'),
+  calendarView: $('#calendar-view'),
+  calPrev: $('#cal-prev'),
+  calNext: $('#cal-next'),
+  calToday: $('#cal-today'),
+  calMonthLabel: $('#cal-month-label'),
+  calendarGrid: $('#calendar-grid'),
 };
 
 const THEME_KEY = 'timesheet.theme.v1';
+const VIEW_KEY = 'timesheet.view.v1';
+const CAL_COLOR_COUNT = 8;
 
 let tasks = [];
 let entries = [];
 let bannerTimer;
 let editingEntryId = null;
+let calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
 /* ---------- API ---------- */
 
@@ -323,6 +334,7 @@ function renderEntries() {
 
   if (!entries.length) {
     els.entryList.appendChild(el('p', 'empty-note', 'No entries yet. Log your first one above — it will appear here.'));
+    renderCalendar();
     return;
   }
 
@@ -341,6 +353,8 @@ function renderEntries() {
     for (const item of items) day.appendChild(entryRow(item));
     els.entryList.appendChild(day);
   }
+
+  renderCalendar();
 }
 
 function entryRow(item) {
@@ -456,6 +470,124 @@ function cancelEdit() {
   els.description.value = '';
   clearDurationInputs();
   clearError();
+}
+
+/* ---------- Calendar view ---------- */
+
+function hashString(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+}
+
+function taskColorClass(task) {
+  return `cal-color-${hashString(task.toLowerCase()) % CAL_COLOR_COUNT}`;
+}
+
+function setView(view) {
+  const isCalendar = view === 'calendar';
+  els.entryList.classList.toggle('hidden', isCalendar);
+  els.calendarView.classList.toggle('hidden', !isCalendar);
+  els.viewListBtn.classList.toggle('active', !isCalendar);
+  els.viewCalendarBtn.classList.toggle('active', isCalendar);
+  els.viewListBtn.setAttribute('aria-selected', String(!isCalendar));
+  els.viewCalendarBtn.setAttribute('aria-selected', String(isCalendar));
+  localStorage.setItem(VIEW_KEY, view);
+  if (isCalendar) renderCalendar();
+}
+
+function changeCalendarMonth(delta) {
+  calendarCursor = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() + delta, 1);
+  renderCalendar();
+}
+
+function goToCurrentMonth() {
+  const now = new Date();
+  calendarCursor = new Date(now.getFullYear(), now.getMonth(), 1);
+  renderCalendar();
+}
+
+function renderCalendar() {
+  if (!els.calendarGrid) return;
+
+  const year = calendarCursor.getFullYear();
+  const month = calendarCursor.getMonth();
+
+  els.calMonthLabel.textContent = calendarCursor.toLocaleDateString(undefined, {
+    month: 'long',
+    year: 'numeric',
+  });
+
+  const entriesByDate = new Map();
+  for (const e of entries) {
+    if (!entriesByDate.has(e.date)) entriesByDate.set(e.date, []);
+    entriesByDate.get(e.date).push(e);
+  }
+
+  // Monday-first grid: figure out how many leading cells from the previous month we need.
+  const firstOfMonth = new Date(year, month, 1);
+  const firstWeekdayMonBased = (firstOfMonth.getDay() + 6) % 7;
+
+  const gridStart = new Date(year, month, 1 - firstWeekdayMonBased);
+
+  els.calendarGrid.textContent = '';
+
+  const weekdayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  for (const name of weekdayNames) {
+    els.calendarGrid.appendChild(el('div', 'calendar-weekday', name));
+  }
+
+  const totalCells = 42;
+  const todayIso = todayISO();
+
+  for (let i = 0; i < totalCells; i++) {
+    const cellDate = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i);
+    const iso = toISODate(cellDate);
+    const inCurrentMonth = cellDate.getMonth() === month;
+
+    const cellClasses = ['calendar-cell'];
+    if (!inCurrentMonth) cellClasses.push('other-month');
+    if (iso === todayIso) cellClasses.push('today');
+    const cell = el('div', cellClasses.join(' '));
+
+    const head = el('div', 'calendar-cell-head');
+    head.appendChild(el('span', 'calendar-day-number', String(cellDate.getDate())));
+
+    const dayEntries = entriesByDate.get(iso) || [];
+    if (dayEntries.length) {
+      const dayTotal = dayEntries.reduce((sum, e) => sum + e.hours, 0);
+      head.appendChild(el('span', 'calendar-day-total', formatDuration(dayTotal)));
+    }
+    cell.appendChild(head);
+
+    if (dayEntries.length) {
+      const list = el('div', 'calendar-entries');
+      const maxVisible = 3;
+      dayEntries.slice(0, maxVisible).forEach((entry) => {
+        const chip = el('button', `calendar-entry ${taskColorClass(entry.task)}`, entry.task);
+        chip.type = 'button';
+        chip.title = `${entry.task} — ${formatDuration(entry.hours)}${entry.description ? '\n' + entry.description : ''}`;
+        chip.addEventListener('click', () => {
+          setView('list');
+          startEdit(entry);
+        });
+        list.appendChild(chip);
+      });
+      if (dayEntries.length > maxVisible) {
+        const more = el('button', 'calendar-more', `+${dayEntries.length - maxVisible} more`);
+        more.type = 'button';
+        more.addEventListener('click', () => {
+          setView('list');
+        });
+        list.appendChild(more);
+      }
+      cell.appendChild(list);
+    }
+
+    els.calendarGrid.appendChild(cell);
+  }
 }
 
 /* ---------- Downloads ---------- */
@@ -657,6 +789,14 @@ async function init() {
   els.cancelEditBtn.addEventListener('click', cancelEdit);
   els.taskForm.addEventListener('submit', handleTaskAdd);
   els.downloadCsv.addEventListener('click', exportCsv);
+
+  // Calendar / list view toggle
+  els.viewListBtn.addEventListener('click', () => setView('list'));
+  els.viewCalendarBtn.addEventListener('click', () => setView('calendar'));
+  els.calPrev.addEventListener('click', () => changeCalendarMonth(-1));
+  els.calNext.addEventListener('click', () => changeCalendarMonth(1));
+  els.calToday.addEventListener('click', goToCurrentMonth);
+  setView(localStorage.getItem(VIEW_KEY) === 'calendar' ? 'calendar' : 'list');
 
   // Intelligent autocomplete for the task and description fields
   createAutocomplete({
