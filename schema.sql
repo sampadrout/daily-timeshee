@@ -12,3 +12,10 @@ CREATE INDEX IF NOT EXISTS entries_date_idx ON entries (date);
 CREATE TABLE IF NOT EXISTS tasks (
   name TEXT PRIMARY KEY
 );
+
+-- Prompts table stores predefined sentence fragments for description composition
+CREATE TABLE IF NOT EXISTS prompts (
+  type TEXT NOT NULL,
+  value TEXT NOT NULL,
+  PRIMARY KEY (type, value)
+);

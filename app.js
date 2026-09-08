@@ -3,6 +3,24 @@
 const RETENTION_DAYS = 90; // fallback only — the server enforces the retention window
 const TOKEN_KEY = 'timesheet.token.v1';
 
+// Ensure all fetch calls include Authorization header when token exists.
+// This provides a safe client-side insertion point so the api() wrapper doesn't need to manage header string directly.
+(function () {
+  if (typeof window === 'undefined' || !window.fetch) return;
+  const _fetch = window.fetch.bind(window);
+  window.fetch = function (input, init = {}) {
+    const token = localStorage.getItem(TOKEN_KEY);
+    init = init || {};
+    init.headers = init.headers || {};
+    try {
+      if (token) init.headers['authorization'] = `Bearer ${token}`;
+    } catch (e) {
+      // ignore
+    }
+    return _fetch(input, init);
+  };
+})();
+
 const $ = (sel) => document.querySelector(sel);
 
 const els = {
@@ -51,6 +69,9 @@ const CAL_COLOR_COUNT = 8;
 
 let tasks = [];
 let entries = [];
+let promptTasks = [];
+let promptUnits = [];
+let promptNames = [];
 let bannerTimer;
 let editingEntryId = null;
 let calendarCursor = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
@@ -101,6 +122,36 @@ async function loadEntries() {
 
 async function loadTasks() {
   tasks = (await api('/api/tasks')).tasks;
+}
+
+async function loadPrompts() {
+  try {
+    promptTasks = (await api('/api/prompts?type=task')).prompts;
+  } catch (err) {
+    promptTasks = [];
+  }
+  try {
+    promptUnits = (await api('/api/prompts?type=unit')).prompts;
+  } catch (err) {
+    promptUnits = [];
+  }
+  try {
+    promptNames = (await api('/api/prompts?type=name')).prompts;
+  } catch (err) {
+    promptNames = [];
+  }
+}
+
+async function addPrompt(type, value) {
+  await api('/api/prompts', { method: 'POST', body: JSON.stringify({ type, value }) });
+  await loadPrompts();
+}
+
+async function removePrompt(type, value) {
+  await api(`/api/prompts?type=${encodeURIComponent(type)}&value=${encodeURIComponent(value)}`, { method: 'DELETE' });
+  if (type === 'task') promptTasks = promptTasks.filter((p) => p !== value);
+  else if (type === 'unit') promptUnits = promptUnits.filter((p) => p !== value);
+  else if (type === 'name') promptNames = promptNames.filter((p) => p !== value);
 }
 
 async function saveEntry(entry) {
@@ -610,8 +661,8 @@ function downloadBlob(content, filename, mime) {
 }
 
 function exportCsv() {
-  const rows = [['Date', 'Task', 'Description', 'Hours']];
-  for (const e of sortedEntries()) rows.push([e.date, e.task, e.description, String(e.hours)]);
+  const rows = [['Date', 'Task', 'Description']];
+  for (const e of sortedEntries()) rows.push([e.date, e.task, e.description]);
   const csv = '\ufeff' + rows.map((r) => r.map(csvEscape).join(',')).join('\r\n');
   downloadBlob(csv, `timesheet-${todayISO()}.csv`, 'text/csv;charset=utf-8');
 }
@@ -629,6 +680,11 @@ async function loadAppData() {
     await loadTasks();
   } catch (err) {
     showBanner(`Couldn't load tasks: ${err.message}`);
+  }
+  try {
+    await loadPrompts();
+  } catch (err) {
+    showBanner(`Couldn't load prompts: ${err.message}`);
   }
 
   renderTasks();
@@ -759,6 +815,51 @@ function getDescriptionSuggestions(query) {
   return suggestions;
 }
 
+// Compose a natural sentence from Task, Unit and Name fragments.
+function composeSentence(taskFrag, unitFrag, nameFrag) {
+  const parts = [];
+  if (taskFrag && taskFrag.trim()) parts.push(taskFrag.trim());
+  if (unitFrag && unitFrag.trim()) parts.push(unitFrag.trim());
+  if (nameFrag && nameFrag.trim()) parts.push(nameFrag.trim());
+  if (!parts.length) return '';
+  let sentence = parts.join(' ');
+  sentence = sentence.replace(/\s+/g, ' ').trim();
+  const last = sentence[sentence.length - 1];
+  if (!['.', '!', '?'].includes(last)) sentence += '.';
+  return sentence;
+}
+
+// Normalize string for comparison: collapse whitespace and strip trailing punctuation.
+function _normalizeForCompare(s) {
+  return (s || '').replace(/\s+/g, ' ').trim().replace(/[.!?]+$/, '');
+}
+
+// Append composed sentence to existing description while preventing duplicates and enforcing length limit.
+// Returns the new description string, or null if append would exceed limits (caller should show banner).
+function appendToDescription(existingDesc, composedSentence) {
+  if (!composedSentence) return existingDesc;
+  const existingTrim = (existingDesc || '').replace(/\s+/g, ' ').trim();
+  const composedTrim = composedSentence.replace(/\s+/g, ' ').trim();
+
+  if (!existingTrim) {
+    // empty -> just insert composed (but ensure length)
+    if (composedTrim.length > 2000) return null;
+    return composedTrim;
+  }
+
+  // Duplicate prevention: if existing already ends with the composed sentence, do nothing
+  const normExisting = _normalizeForCompare(existingTrim);
+  const normComposed = _normalizeForCompare(composedTrim);
+  if (normExisting.endsWith(normComposed)) return existingDesc;
+
+  // Decide separator: always a single space (existing punctuation preserved)
+  const space = ' ';
+  let result = existingTrim + space + composedTrim;
+
+  if (result.length > 2000) return null;
+  return result;
+}
+
 /** ---------- Theme Toggle ---------- */
 
 function getPreferredTheme() {
@@ -808,6 +909,89 @@ async function init() {
     input: els.description,
     list: els.descriptionSuggestions,
     getSuggestions: getDescriptionSuggestions,
+  });
+
+  // Prompt autocompletes
+  const getPromptSuggestions = (type) => (query) => {
+    const q = query.trim().toLowerCase();
+    let pool = [];
+    if (type === 'task') pool = promptTasks.slice();
+    else if (type === 'unit') pool = promptUnits.slice();
+    else if (type === 'name') pool = promptNames.slice();
+    const matches = q ? pool.filter((p) => p.toLowerCase().includes(q)) : pool.slice();
+    return matches.filter((p) => p.toLowerCase() !== q).map((p) => ({ value: p, label: p }));
+  };
+
+  createAutocomplete({
+    input: document.getElementById('prompt-task-input'),
+    list: document.getElementById('prompt-task-suggestions'),
+    getSuggestions: getPromptSuggestions('task'),
+  });
+  createAutocomplete({
+    input: document.getElementById('prompt-unit-input'),
+    list: document.getElementById('prompt-unit-suggestions'),
+    getSuggestions: getPromptSuggestions('unit'),
+  });
+  createAutocomplete({
+    input: document.getElementById('prompt-name-input'),
+    list: document.getElementById('prompt-name-suggestions'),
+    getSuggestions: getPromptSuggestions('name'),
+  });
+
+  // Add prompt buttons
+  document.getElementById('prompt-task-add').addEventListener('click', async () => {
+    const inp = document.getElementById('prompt-task-input');
+    const v = inp.value.trim();
+    if (!v) return;
+    try {
+      await addPrompt('task', v);
+      inp.value = '';
+      showBanner('Task prompt added');
+    } catch (err) {
+      showBanner(`Couldn't add prompt: ${err.message}`);
+    }
+  });
+  document.getElementById('prompt-unit-add').addEventListener('click', async () => {
+    const inp = document.getElementById('prompt-unit-input');
+    const v = inp.value.trim();
+    if (!v) return;
+    try {
+      await addPrompt('unit', v);
+      inp.value = '';
+      showBanner('Unit prompt added');
+    } catch (err) {
+      showBanner(`Couldn't add prompt: ${err.message}`);
+    }
+  });
+  document.getElementById('prompt-name-add').addEventListener('click', async () => {
+    const inp = document.getElementById('prompt-name-input');
+    const v = inp.value.trim();
+    if (!v) return;
+    try {
+      await addPrompt('name', v);
+      inp.value = '';
+      showBanner('Name prompt added');
+    } catch (err) {
+      showBanner(`Couldn't add prompt: ${err.message}`);
+    }
+  });
+
+  // Apply prompts button: append the composed sentence to the description (never replace)
+  document.getElementById('apply-prompts-btn').addEventListener('click', () => {
+    const t = document.getElementById('prompt-task-input').value;
+    const u = document.getElementById('prompt-unit-input').value;
+    const n = document.getElementById('prompt-name-input').value;
+    const composed = composeSentence(t, u, n);
+    if (!composed) return;
+    const newDesc = appendToDescription(els.description.value, composed);
+    if (newDesc === null) {
+      showBanner('Description too long to append prompt.');
+      return;
+    }
+    // No-op if append would duplicate
+    if (newDesc === els.description.value) return;
+    els.description.value = newDesc;
+    els.description.focus();
   });
 
   // Theme toggle listener
