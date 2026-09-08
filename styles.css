@@ -766,3 +766,35 @@ textarea {
     flex: 1;
   }
 }
+
+/* ---------- Prompt controls ---------- */
+.prompt-controls {
+  margin-top: 8px;
+  display: grid;
+  gap: 8px;
+}
+.prompt-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.prompt-row > label {
+  flex: 1;
+}
+.prompt-row input {
+  padding: 8px 10px;
+}
+.prompt-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 520px) {
+  .prompt-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .prompt-actions {
+    justify-content: stretch;
+  }
+}
