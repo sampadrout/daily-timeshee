@@ -302,10 +302,14 @@ function clearDurationInputs() {
 }
 
 function getDurationHours() {
-  const h = els.hoursPart.value.trim() === '' ? NaN : Number(els.hoursPart.value);
-  const m = els.minutesPart.value.trim() === '' ? 0 : Number(els.minutesPart.value);
+  const hRaw = els.hoursPart.value.trim();
+  const mRaw = els.minutesPart.value.trim();
+  const h = hRaw === '' ? 0 : Number(hRaw);
+  const m = mRaw === '' ? 0 : Number(mRaw);
   if (!Number.isFinite(h) || !Number.isFinite(m) || h < 0 || m < 0 || m > 59) return NaN;
-  return h + m / 60;
+  const total = h + m / 60;
+  if (total <= 0) return NaN; // reject zero-duration entries
+  return total;
 }
 
 function showError(msg) {
