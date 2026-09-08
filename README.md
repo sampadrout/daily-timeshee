@@ -108,3 +108,4 @@ This serves the site and the API locally using a local D1 emulator and your `.de
 | `wrangler.toml` | Project name + D1 binding |
 
 ## New Changes
+All changes will be added here
