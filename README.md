@@ -106,3 +106,5 @@ This serves the site and the API locally using a local D1 emulator and your `.de
 | `functions/` | API endpoints (Pages Functions) |
 | `schema.sql` | D1 database schema |
 | `wrangler.toml` | Project name + D1 binding |
+
+## New Changes
