@@ -837,17 +837,25 @@ function getDescriptionSuggestions(query) {
   return suggestions;
 }
 
-// Compose a natural sentence from Task, Unit and Name fragments.
-function composeSentence(taskFrag, unitFrag, nameFrag) {
+// Compose a natural sentence from Task (entry task), Purpose, Unit and Name fragments.
+function composeSentence(entryTask, purposeFrag, unitFrag, nameFrag) {
   const parts = [];
-  if (taskFrag && taskFrag.trim()) parts.push(taskFrag.trim());
-  if (unitFrag && unitFrag.trim()) parts.push(unitFrag.trim());
-  if (nameFrag && nameFrag.trim()) parts.push(nameFrag.trim());
-  if (!parts.length) return '';
-  let sentence = parts.join(' ');
+  if (entryTask && entryTask.trim()) parts.push(entryTask.trim());
+  if (purposeFrag && purposeFrag.trim()) parts.push(purposeFrag.trim());
+
+  let sentence = parts.join(' ').replace(/\s+/g, ' ').trim();
+
+  if (unitFrag && unitFrag.trim()) {
+    sentence = sentence ? `${sentence} at ${unitFrag.trim()}` : unitFrag.trim();
+  }
+
+  if (nameFrag && nameFrag.trim()) {
+    sentence = sentence ? `${sentence} with ${nameFrag.trim()}` : nameFrag.trim();
+  }
+
   sentence = sentence.replace(/\s+/g, ' ').trim();
-  const last = sentence[sentence.length - 1];
-  if (!['.', '!', '?'].includes(last)) sentence += '.';
+  if (!sentence) return '';
+  if (!/[.!?]$/.test(sentence)) sentence += '.';
   return sentence;
 }
 
@@ -968,7 +976,7 @@ async function init() {
     try {
       await addPrompt('task', v);
       inp.value = '';
-      showBanner('Task prompt added');
+      showBanner('Purpose prompt added');
     } catch (err) {
       showBanner(`Couldn't add prompt: ${err.message}`);
     }
@@ -1000,10 +1008,11 @@ async function init() {
 
   // Apply prompts button: append the composed sentence to the description (never replace)
   document.getElementById('apply-prompts-btn').addEventListener('click', () => {
-    const t = document.getElementById('prompt-task-input').value;
-    const u = document.getElementById('prompt-unit-input').value;
-    const n = document.getElementById('prompt-name-input').value;
-    const composed = composeSentence(t, u, n);
+    const taskVal = (els.entryTaskInput && els.entryTaskInput.value) ? els.entryTaskInput.value : '';
+    const purpose = document.getElementById('prompt-task-input').value;
+    const unit = document.getElementById('prompt-unit-input').value;
+    const name = document.getElementById('prompt-name-input').value;
+    const composed = composeSentence(taskVal, purpose, unit, name);
     if (!composed) return;
     const newDesc = appendToDescription(els.description.value, composed);
     if (newDesc === null) {
