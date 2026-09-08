@@ -661,7 +661,29 @@ function downloadBlob(content, filename, mime) {
 }
 
 function exportCsv() {
+  const selected = (els.date && els.date.value) ? els.date.value.trim() : '';
   const rows = [['Date', 'Task', 'Description']];
+
+  if (selected) {
+    // Validate selected date format YYYY-MM-DD
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(selected)) {
+      showBanner('Selected date is invalid.');
+      return;
+    }
+
+    const filtered = sortedEntries().filter((e) => e.date === selected);
+    if (!filtered.length) {
+      showBanner('No entries for the selected date.');
+      return;
+    }
+    for (const e of filtered) rows.push([e.date, e.task, e.description]);
+
+    const csv = '\ufeff' + rows.map((r) => r.map(csvEscape).join(',')).join('\r\n');
+    downloadBlob(csv, `timesheet-${selected}.csv`, 'text/csv;charset=utf-8');
+    return;
+  }
+
+  // No selected date — fallback to exporting everything and naming by today
   for (const e of sortedEntries()) rows.push([e.date, e.task, e.description]);
   const csv = '\ufeff' + rows.map((r) => r.map(csvEscape).join(',')).join('\r\n');
   downloadBlob(csv, `timesheet-${todayISO()}.csv`, 'text/csv;charset=utf-8');
